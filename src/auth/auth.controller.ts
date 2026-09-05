@@ -8,14 +8,16 @@ import { LoginDto } from './dto/login.dto';
 const REFRESH_COOKIE = 'wb_refresh_token';
 
 function refreshCookieOptions() {
-  const isProd = process.env.NODE_ENV === 'production';
+  // Явные флаги через env — не привязаны к NODE_ENV, т.к. топология деплоя влияет
+  // на них по-разному: фронт и бэк на разных доменах (Netlify+PaaS) требуют
+  // SameSite=None + Secure (HTTPS обязателен); фронт и бэк за одним nginx на
+  // одном origin (VPS без домена, просто IP по HTTP) — обычный Lax без Secure.
+  // Задаётся в .env: COOKIE_CROSS_SITE=true только для варианта с разными доменами.
+  const crossSite = process.env.COOKIE_CROSS_SITE === 'true';
   return {
     httpOnly: true,
-    // В продакшене фронтенд (Netlify) и бэкенд (Fly.io) — разные домены,
-    // поэтому нужен SameSite=None (требует Secure). В деве оба на localhost,
-    // разные порты одного "сайта" — Lax работает и не требует HTTPS.
-    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
-    secure: isProd,
+    sameSite: (crossSite ? 'none' : 'lax') as 'none' | 'lax',
+    secure: crossSite,
     path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   };
