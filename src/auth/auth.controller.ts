@@ -8,10 +8,14 @@ import { LoginDto } from './dto/login.dto';
 const REFRESH_COOKIE = 'wb_refresh_token';
 
 function refreshCookieOptions() {
+  const isProd = process.env.NODE_ENV === 'production';
   return {
     httpOnly: true,
-    sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
+    // В продакшене фронтенд (Netlify) и бэкенд (Fly.io) — разные домены,
+    // поэтому нужен SameSite=None (требует Secure). В деве оба на localhost,
+    // разные порты одного "сайта" — Lax работает и не требует HTTPS.
+    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
+    secure: isProd,
     path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   };

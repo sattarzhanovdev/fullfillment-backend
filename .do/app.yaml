@@ -1,0 +1,58 @@
+# Спецификация DigitalOcean App Platform.
+# Импорт: App Platform → Create App → "Edit Your App Spec" → вставить этот файл,
+# либо `doctl apps create --spec .do/app.yaml`.
+#
+# После первого создания секреты (JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, CORS_ORIGIN)
+# нужно один раз задать в UI (App → Settings → api → Environment Variables) —
+# в спеке они намеренно оставлены пустыми, чтобы не хранить секреты в git.
+
+name: fullfillment-backend
+region: fra
+services:
+  - name: api
+    github:
+      repo: sattarzhanovdev/fullfillment-backend
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    source_dir: /
+    http_port: 4000
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+    routes:
+      - path: /
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 20
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+        scope: RUN_TIME
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: STORAGE_DIR
+        value: ./storage
+      - key: WB_API_BASE_URL
+        value: https://suppliers-api.wildberries.ru
+      - key: OZON_API_BASE_URL
+        value: https://api-seller.ozon.ru
+      # Задать вручную в UI как Encrypted (Secret):
+      - key: JWT_ACCESS_SECRET
+        type: SECRET
+      - key: JWT_REFRESH_SECRET
+        type: SECRET
+      # Домен фронтенда на Netlify — задать после его создания:
+      - key: CORS_ORIGIN
+        type: SECRET
+
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    production: false
