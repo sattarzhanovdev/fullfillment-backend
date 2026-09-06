@@ -2,6 +2,8 @@ export interface MarketplaceOrderPayload {
   externalOrderNumber: string;
   productBarcode: string;
   qty: number;
+  /** Артикул продавца, если маркетплейс его отдаёт — используется для авто-заведения карточки товара. */
+  productArticle?: string;
 }
 
 export interface MarketplaceStockPayload {

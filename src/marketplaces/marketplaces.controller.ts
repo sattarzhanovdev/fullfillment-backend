@@ -11,6 +11,7 @@ export class MarketplacesController {
   constructor(private marketplacesService: MarketplacesService) {}
 
   @Get('client/:clientId')
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER)
   findForClient(@Param('clientId') clientId: string) {
     return this.marketplacesService.findForClient(clientId);
   }
