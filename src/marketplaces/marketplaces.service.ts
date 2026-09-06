@@ -3,7 +3,7 @@ import { Marketplace } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WildberriesAdapter } from './adapters/wildberries.adapter';
 import { OzonAdapter } from './adapters/ozon.adapter';
-import { MarketplaceAdapter } from './adapters/marketplace-adapter.interface';
+import { MarketplaceAdapter, MarketplaceProductCatalogItem } from './adapters/marketplace-adapter.interface';
 import { OrdersService } from '../orders/orders.service';
 import { ProductsService } from '../products/products.service';
 
@@ -57,6 +57,19 @@ export class MarketplacesService {
     try {
       await this.prisma.marketplaceIntegration.update({ where: { id: integrationId }, data: { status: 'SYNCING' } });
 
+      // Каталог — необязательное обогащение (нужен доступ категории "Контент",
+      // которого у ключа может не быть). Если недоступен — не валим весь синк,
+      // importOrders всё равно заведёт черновые карточки по данным заказа.
+      let catalogResult = { catalogFetched: 0, catalogCreated: 0, catalogUpdated: 0, catalogError: null as string | null };
+      try {
+        const catalog = await adapter.fetchProductCatalog(integration.apiKey);
+        catalogResult = { ...(await this.importCatalog(integration.clientId, catalog)), catalogError: null };
+      } catch (catalogError) {
+        const message = catalogError instanceof Error ? catalogError.message : String(catalogError);
+        this.logger.warn(`sync: каталог маркетплейса недоступен, пропускаем обогащение — ${message}`);
+        catalogResult.catalogError = message;
+      }
+
       const fetchedOrders = await adapter.fetchOrders(integration.apiKey);
       const importResult = await this.importOrders(integration.clientId, integration.marketplace, fetchedOrders);
 
@@ -66,7 +79,7 @@ export class MarketplacesService {
         where: { id: integrationId },
         data: { status: 'CONNECTED', lastSyncAt: new Date() },
       });
-      return { integrationId, ...importResult };
+      return { integrationId, ...catalogResult, ...importResult };
     } catch (error) {
       await this.prisma.marketplaceIntegration.update({ where: { id: integrationId }, data: { status: 'ERROR' } });
       throw error;
@@ -74,13 +87,59 @@ export class MarketplacesService {
   }
 
   /**
+   * Затягивает весь каталог карточек товара с маркетплейса (название,
+   * габариты, вес) и заводит/обновляет Product по штрихкоду — чтобы реальные
+   * заказы матчились с полноценными карточками, а не с черновиками "название
+   * неизвестно". Один WB-товар может иметь несколько размеров/штрихкодов —
+   * на каждый штрихкод отдельная запись Product, как того требует модель.
+   */
+  private async importCatalog(clientId: string, catalog: MarketplaceProductCatalogItem[]) {
+    let catalogCreated = 0;
+    let catalogUpdated = 0;
+
+    for (const item of catalog) {
+      const existing = await this.productsService.findByBarcode(item.barcode, clientId);
+      const fields = {
+        name: item.name,
+        article: item.article,
+        lengthCm: item.lengthCm,
+        widthCm: item.widthCm,
+        heightCm: item.heightCm,
+        weightKg: item.weightKg,
+      };
+
+      if (existing) {
+        await this.productsService.update(existing.id, fields);
+        catalogUpdated++;
+        continue;
+      }
+
+      try {
+        await this.productsService.create({ clientId, sku: item.article, barcode: item.barcode, ...fields });
+      } catch {
+        // Артикул уже занят другим штрихкодом той же карточки (несколько размеров) — уникализируем.
+        await this.productsService.create({
+          clientId,
+          sku: `${item.article}-${item.barcode}`,
+          barcode: item.barcode,
+          ...fields,
+          article: `${item.article}-${item.barcode}`,
+        });
+      }
+      catalogCreated++;
+    }
+
+    return { catalogFetched: catalog.length, catalogCreated, catalogUpdated };
+  }
+
+  /**
    * Создаёт реальные FBS-заказы (MarketplaceOrder) из данных маркетплейса
    * через штатный OrdersService.create — резерв остатков, ценообразование,
    * проверка задолженности, статусная машина (ТЗ §48) отрабатывают как для
-   * заказа, заведённого вручную. Если штрихкод не найден в каталоге клиента,
-   * заводим черновую карточку товара (без остатков/габаритов/цены) — заказ
-   * штатно уйдёт в ERROR (нет остатка для резерва) или NEEDS_PRICE, пока
-   * кто-то не заведёт остатки и не заполнит габариты/цену.
+   * заказа, заведённого вручную. importCatalog уже должен был завести карточку
+   * для каждого реального штрихкода; черновик здесь — крайний случай (штрихкод
+   * пропал из свежего среза каталога, но остался в заказе), и это тревожный
+   * сигнал, а не штатный путь.
    */
   private async importOrders(
     clientId: string,
@@ -109,7 +168,9 @@ export class MarketplacesService {
           barcode: fetched.productBarcode,
         });
         autoCreatedProducts++;
-        this.logger.warn(`sync: заведена черновая карточка товара для штрихкода ${fetched.productBarcode} (арт. ${article}) — требуются габариты/цена`);
+        this.logger.warn(
+          `sync: штрихкод ${fetched.productBarcode} (арт. ${article}) отсутствует в актуальном каталоге маркетплейса, заведена черновая карточка — требуются габариты/цена`,
+        );
       }
 
       await this.ordersService.create({

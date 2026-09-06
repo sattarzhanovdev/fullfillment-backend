@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MarketplaceAdapter, MarketplaceOrderPayload, MarketplaceStockPayload } from './marketplace-adapter.interface';
+import {
+  MarketplaceAdapter,
+  MarketplaceOrderPayload,
+  MarketplaceProductCatalogItem,
+  MarketplaceStockPayload,
+} from './marketplace-adapter.interface';
 
 /**
  * TODO: подключить реальный API Ozon Seller (https://api-seller.ozon.ru)
@@ -21,6 +26,11 @@ export class OzonAdapter implements MarketplaceAdapter {
 
   async fetchSupplies(_apiKey: string): Promise<unknown[]> {
     this.logger.log('fetchSupplies: заглушка Ozon API, реальный вызов не выполнен');
+    return [];
+  }
+
+  async fetchProductCatalog(_apiKey: string): Promise<MarketplaceProductCatalogItem[]> {
+    this.logger.log('fetchProductCatalog: заглушка Ozon API, реальный вызов не выполнен');
     return [];
   }
 

@@ -11,6 +11,16 @@ export interface MarketplaceStockPayload {
   qty: number;
 }
 
+export interface MarketplaceProductCatalogItem {
+  barcode: string;
+  name: string;
+  article: string;
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+  weightKg?: number;
+}
+
 /**
  * Общий интерфейс адаптера маркетплейса. Реальные реализации должны выполнять
  * HTTP-запросы к API Wildberries/Ozon, используя apiKey интеграции клиента.
@@ -20,5 +30,6 @@ export interface MarketplaceAdapter {
   fetchOrders(apiKey: string): Promise<MarketplaceOrderPayload[]>;
   fetchStock(apiKey: string): Promise<MarketplaceStockPayload[]>;
   fetchSupplies(apiKey: string): Promise<unknown[]>;
+  fetchProductCatalog(apiKey: string): Promise<MarketplaceProductCatalogItem[]>;
   pushLabels(apiKey: string, orderNumbers: string[]): Promise<void>;
 }
