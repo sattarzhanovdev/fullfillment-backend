@@ -38,5 +38,5 @@ export interface MarketplaceAdapter {
   fetchStock(apiKey: string): Promise<MarketplaceStockPayload[]>;
   fetchSupplies(apiKey: string): Promise<unknown[]>;
   fetchProductCatalog(apiKey: string): Promise<MarketplaceProductCatalogItem[]>;
-  fetchLabels(apiKey: string, orderNumbers: string[]): Promise<MarketplaceLabelItem[]>;
+  fetchLabels(apiKey: string, orderNumbers: string[], size?: { width: number; height: number }): Promise<MarketplaceLabelItem[]>;
 }

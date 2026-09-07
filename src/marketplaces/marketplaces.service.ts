@@ -36,7 +36,7 @@ export class MarketplacesService {
   }
 
   /** Реальная этикетка заказа (PNG с WB) — для печати перед отгрузкой. */
-  async getOrderLabel(orderId: string) {
+  async getOrderLabel(orderId: string, size?: { width: number; height: number }) {
     const order = await this.prisma.marketplaceOrder.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Заказ не найден');
 
@@ -46,7 +46,7 @@ export class MarketplacesService {
     if (!integration?.apiKey) throw new BadRequestException('У клиента не подключена интеграция с этим маркетплейсом');
 
     const adapter = this.resolveAdapter(order.marketplace);
-    const labels = await adapter.fetchLabels(integration.apiKey, [order.orderNumber]);
+    const labels = await adapter.fetchLabels(integration.apiKey, [order.orderNumber], size);
     const label = labels[0];
     if (!label) throw new NotFoundException('Маркетплейс не вернул этикетку для этого заказа');
     return label;

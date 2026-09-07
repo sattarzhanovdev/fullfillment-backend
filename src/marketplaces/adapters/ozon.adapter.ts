@@ -35,7 +35,11 @@ export class OzonAdapter implements MarketplaceAdapter {
     return [];
   }
 
-  async fetchLabels(_apiKey: string, _orderNumbers: string[]): Promise<MarketplaceLabelItem[]> {
+  async fetchLabels(
+    _apiKey: string,
+    _orderNumbers: string[],
+    _size?: { width: number; height: number },
+  ): Promise<MarketplaceLabelItem[]> {
     this.logger.log('fetchLabels: заглушка Ozon API, реальный вызов не выполнен');
     return [];
   }

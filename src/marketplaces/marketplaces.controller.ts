@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Logger, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Logger, Param, Post, Query } from '@nestjs/common';
 import { Marketplace, UserRole } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -34,8 +34,9 @@ export class MarketplacesController {
 
   @Get('orders/:orderId/label')
   @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER, UserRole.STOREKEEPER, UserRole.PACKER)
-  getOrderLabel(@Param('orderId') orderId: string) {
-    return this.marketplacesService.getOrderLabel(orderId);
+  getOrderLabel(@Param('orderId') orderId: string, @Query('width') width?: string, @Query('height') height?: string) {
+    const size = width && height ? { width: Number(width), height: Number(height) } : undefined;
+    return this.marketplacesService.getOrderLabel(orderId, size);
   }
 
   // ---- Webhooks (ТЗ §50) — точка расширения под реальные вызовы маркетплейсов ----

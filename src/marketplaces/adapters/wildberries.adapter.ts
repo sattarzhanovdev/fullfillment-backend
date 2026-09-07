@@ -187,12 +187,16 @@ export class WildberriesAdapter implements MarketplaceAdapter {
   }
 
   /** Реальные этикетки заказа (PNG, base64) с WB — то, что клеится на посылку перед отгрузкой. */
-  async fetchLabels(apiKey: string, orderNumbers: string[]): Promise<MarketplaceLabelItem[]> {
+  async fetchLabels(
+    apiKey: string,
+    orderNumbers: string[],
+    size: { width: number; height: number } = { width: 58, height: 40 },
+  ): Promise<MarketplaceLabelItem[]> {
     this.logger.log(`fetchLabels: запрос этикеток для ${orderNumbers.length} заказов к WB Marketplace API`);
     const orders = orderNumbers.map((n) => Number(n));
     const data = await this.request<{ stickers: { orderId: number; file: string }[] }>(
       MARKETPLACE_API_URL,
-      '/api/v3/orders/stickers?type=png&width=58&height=40',
+      `/api/v3/orders/stickers?type=png&width=${size.width}&height=${size.height}`,
       apiKey,
       { method: 'POST', body: { orders } },
     );
