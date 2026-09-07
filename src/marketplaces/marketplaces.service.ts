@@ -48,7 +48,14 @@ export class MarketplacesService {
     const adapter = this.resolveAdapter(order.marketplace);
     const labels = await adapter.fetchLabels(integration.apiKey, [order.orderNumber], size);
     const label = labels[0];
-    if (!label) throw new NotFoundException('Маркетплейс не вернул этикетку для этого заказа');
+    if (!label) {
+      // WB не генерирует этикетку, пока продавец не подтвердит заказ в своём
+      // ЛК/API (supplierStatus переходит из "new" в "confirm"/"complete") —
+      // это не ошибка запроса, а нормальное состояние свежего заказа.
+      throw new NotFoundException(
+        'WB ещё не выдал этикетку для этого заказа — обычно это значит, что заказ не подтверждён в личном кабинете WB. Подтвердите заказ на стороне WB и попробуйте снова.',
+      );
+    }
     return label;
   }
 
