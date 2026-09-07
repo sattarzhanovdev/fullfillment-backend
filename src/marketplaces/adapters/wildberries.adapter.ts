@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   MarketplaceAdapter,
+  MarketplaceLabelItem,
   MarketplaceOrderPayload,
   MarketplaceProductCatalogItem,
   MarketplaceStockPayload,
@@ -185,18 +186,20 @@ export class WildberriesAdapter implements MarketplaceAdapter {
     return data?.supplies ?? [];
   }
 
-  async pushLabels(apiKey: string, orderNumbers: string[]): Promise<void> {
-    this.logger.log(`pushLabels: запрос этикеток для ${orderNumbers.length} заказов к WB Marketplace API`);
+  /** Реальные этикетки заказа (PNG, base64) с WB — то, что клеится на посылку перед отгрузкой. */
+  async fetchLabels(apiKey: string, orderNumbers: string[]): Promise<MarketplaceLabelItem[]> {
+    this.logger.log(`fetchLabels: запрос этикеток для ${orderNumbers.length} заказов к WB Marketplace API`);
     const orders = orderNumbers.map((n) => Number(n));
-    const url = `${MARKETPLACE_API_URL}/api/v3/orders/stickers?type=png&width=58&height=40`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orders }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`WB API stickers вернул ${res.status}: ${text.slice(0, 500)}`);
-    }
+    const data = await this.request<{ stickers: { orderId: number; file: string }[] }>(
+      MARKETPLACE_API_URL,
+      '/api/v3/orders/stickers?type=png&width=58&height=40',
+      apiKey,
+      { method: 'POST', body: { orders } },
+    );
+    return (data?.stickers ?? []).map((s) => ({
+      orderNumber: String(s.orderId),
+      contentType: 'image/png',
+      fileBase64: s.file,
+    }));
   }
 }

@@ -35,6 +35,23 @@ export class MarketplacesService {
     return integrations.map((i) => this.maskApiKey(i));
   }
 
+  /** Реальная этикетка заказа (PNG с WB) — для печати перед отгрузкой. */
+  async getOrderLabel(orderId: string) {
+    const order = await this.prisma.marketplaceOrder.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Заказ не найден');
+
+    const integration = await this.prisma.marketplaceIntegration.findUnique({
+      where: { clientId_marketplace: { clientId: order.clientId, marketplace: order.marketplace } },
+    });
+    if (!integration?.apiKey) throw new BadRequestException('У клиента не подключена интеграция с этим маркетплейсом');
+
+    const adapter = this.resolveAdapter(order.marketplace);
+    const labels = await adapter.fetchLabels(integration.apiKey, [order.orderNumber]);
+    const label = labels[0];
+    if (!label) throw new NotFoundException('Маркетплейс не вернул этикетку для этого заказа');
+    return label;
+  }
+
   async upsert(
     clientId: string,
     marketplace: Marketplace,

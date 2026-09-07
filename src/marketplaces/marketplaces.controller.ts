@@ -32,6 +32,12 @@ export class MarketplacesController {
     return this.marketplacesService.sync(integrationId);
   }
 
+  @Get('orders/:orderId/label')
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER, UserRole.STOREKEEPER, UserRole.PACKER)
+  getOrderLabel(@Param('orderId') orderId: string) {
+    return this.marketplacesService.getOrderLabel(orderId);
+  }
+
   // ---- Webhooks (ТЗ §50) — точка расширения под реальные вызовы маркетплейсов ----
 
   @Public()
