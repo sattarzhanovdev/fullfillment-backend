@@ -4,6 +4,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { isOrderGroup } from './order-groups';
 
 @Controller('orders')
 export class OrdersController {
@@ -13,15 +14,33 @@ export class OrdersController {
   findAll(
     @Query('clientId') clientId?: string,
     @Query('status') status?: string,
+    @Query('group') group?: string,
     @Query('marketplace') marketplace?: Marketplace,
+    @Query('archived') archived?: string,
   ) {
     const statuses = status ? (status.split(',') as FunnelStatus[]) : undefined;
-    return this.ordersService.findAll({ clientId, statuses, marketplace });
+    return this.ordersService.findAll({
+      clientId,
+      statuses,
+      group: group && isOrderGroup(group) ? group : undefined,
+      marketplace,
+      archived: archived === 'true',
+    });
+  }
+
+  @Get('counts')
+  counts(@Query('clientId') clientId?: string) {
+    return this.ordersService.counts(clientId);
   }
 
   @Get('picking/items')
   pickableItems(@Query('clientId') clientId: string) {
     return this.ordersService.pickableItems(clientId);
+  }
+
+  @Get('pending-shipment/by-barcode/:barcode')
+  findReadyByBarcode(@Param('barcode') barcode: string) {
+    return this.ordersService.findReadyByBarcode(barcode);
   }
 
   @Get(':id')
@@ -69,5 +88,11 @@ export class OrdersController {
   @Roles(UserRole.ADMIN, UserRole.PACKER)
   setPackaging(@Param('id') id: string, @Body('packagingTypeId') packagingTypeId: string) {
     return this.ordersService.setPackaging(id, packagingTypeId);
+  }
+
+  @Patch(':id/archive')
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER)
+  setArchived(@Param('id') id: string, @Body('archived') archived: boolean) {
+    return this.ordersService.setArchived(id, archived);
   }
 }

@@ -223,6 +223,7 @@ model Client {
   documents         Document[]
   reservations      Reservation[]
   stocks            Stock[]
+  shipments         Shipment[]
 }
 
 model ClientRequisites {
@@ -495,6 +496,7 @@ model MarketplaceOrder {
   packagingType    PackagingType? @relation(fields: [packagingTypeId], references: [id])
   deadline         DateTime?
   orderedAt        DateTime      @default(now())
+  archivedAt       DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -575,6 +577,15 @@ model SupplyStatusHistory {
 
 model Shipment {
   id            String         @id @default(cuid())
+  barcode       String         @unique
+  /** Одна отгрузка = один продавец: у WB "поставка" привязана к одному API-ключу/аккаунту. */
+  clientId      String?
+  client        Client?        @relation(fields: [clientId], references: [id])
+  /** id реальной поставки в WB (после POST /api/v3/supplies) — если у клиента подключён WB API. */
+  wbSupplyId    String?        @unique
+  /** Пункт и способ отгрузки WB — обязателен, чтобы закрыть поставку (deliver) и получить штрихкод. */
+  wbShippingPointId Int?
+  wbShippingType    String?
   marketplace   Marketplace?
   warehouseId   String?
   warehouse     Warehouse?     @relation(fields: [warehouseId], references: [id])

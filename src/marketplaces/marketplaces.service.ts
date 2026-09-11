@@ -46,7 +46,13 @@ export class MarketplacesService {
     if (!integration?.apiKey) throw new BadRequestException('У клиента не подключена интеграция с этим маркетплейсом');
 
     const adapter = this.resolveAdapter(order.marketplace);
-    const labels = await adapter.fetchLabels(integration.apiKey, [order.orderNumber], size);
+    let labels;
+    try {
+      labels = await adapter.fetchLabels(integration.apiKey, [order.orderNumber], size);
+    } catch (err) {
+      this.logger.warn(`fetchLabels(${order.orderNumber}) не удался: ${(err as Error).message}`);
+      throw new BadRequestException((err as Error).message);
+    }
     const label = labels[0];
     if (!label) {
       // WB не генерирует этикетку, пока продавец не подтвердит заказ в своём

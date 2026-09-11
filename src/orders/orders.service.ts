@@ -7,6 +7,7 @@ import { DebtsService } from '../debts/debts.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsGateway } from '../events/events.gateway';
 import { isTransitionAllowed } from './order-funnel';
+import { ORDER_GROUPS, OrderGroup } from './order-groups';
 
 export interface CreateOrderInput {
   orderNumber: string;
@@ -28,12 +29,20 @@ export class OrdersService {
     private eventsGateway: EventsGateway,
   ) {}
 
-  findAll(filters: { clientId?: string; statuses?: FunnelStatus[]; marketplace?: Marketplace }) {
+  findAll(filters: {
+    clientId?: string;
+    statuses?: FunnelStatus[];
+    group?: OrderGroup;
+    marketplace?: Marketplace;
+    archived?: boolean;
+  }) {
+    const statuses = filters.group ? ORDER_GROUPS[filters.group] : filters.statuses;
     return this.prisma.marketplaceOrder.findMany({
       where: {
         ...(filters.clientId && { clientId: filters.clientId }),
-        ...(filters.statuses && filters.statuses.length > 0 && { status: { in: filters.statuses } }),
+        ...(statuses && statuses.length > 0 && { status: { in: statuses } }),
         ...(filters.marketplace && { marketplace: filters.marketplace }),
+        archivedAt: filters.archived ? { not: null } : null,
       },
       include: {
         client: { select: { id: true, name: true } },
@@ -42,6 +51,19 @@ export class OrdersService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async counts(clientId?: string) {
+    const base = { ...(clientId && { clientId }) };
+    const [newCount, picking, shipping, completed, cancelled, archive] = await Promise.all([
+      this.prisma.marketplaceOrder.count({ where: { ...base, archivedAt: null, status: { in: ORDER_GROUPS.NEW } } }),
+      this.prisma.marketplaceOrder.count({ where: { ...base, archivedAt: null, status: { in: ORDER_GROUPS.PICKING } } }),
+      this.prisma.marketplaceOrder.count({ where: { ...base, archivedAt: null, status: { in: ORDER_GROUPS.SHIPPING } } }),
+      this.prisma.marketplaceOrder.count({ where: { ...base, archivedAt: null, status: { in: ORDER_GROUPS.COMPLETED } } }),
+      this.prisma.marketplaceOrder.count({ where: { ...base, archivedAt: null, status: { in: ORDER_GROUPS.CANCELLED } } }),
+      this.prisma.marketplaceOrder.count({ where: { ...base, archivedAt: { not: null } } }),
+    ]);
+    return { new: newCount, picking, shipping, completed, cancelled, archive };
   }
 
   async findOne(id: string) {
@@ -266,5 +288,45 @@ export class OrdersService {
       return this.transitionStatus(orderId, 'READY_TO_SHIP', null);
     }
     return updated;
+  }
+
+  // ---------- Архив ----------
+
+  async setArchived(orderId: string, archived: boolean) {
+    const order = await this.prisma.marketplaceOrder.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Заказ не найден');
+    if (archived && order.status !== 'COMPLETED' && order.status !== 'CANCELLED') {
+      throw new BadRequestException('В архив можно отправить только завершённый или отменённый заказ');
+    }
+    return this.prisma.marketplaceOrder.update({
+      where: { id: orderId },
+      data: { archivedAt: archived ? new Date() : null },
+    });
+  }
+
+  // ---------- Поиск для сканирования (страница отгрузок) ----------
+
+  /** Находит заказ, готовый к отгрузке и ещё не привязанный к ней, по штрихкоду одного из его товаров. */
+  async findReadyByBarcode(barcode: string) {
+    const products = await this.prisma.product.findMany({ where: { barcode } });
+    if (products.length === 0) {
+      throw new NotFoundException('Товар с таким штрихкодом не найден');
+    }
+    const order = await this.prisma.marketplaceOrder.findFirst({
+      where: {
+        status: 'READY_TO_SHIP',
+        shipmentId: null,
+        items: { some: { productId: { in: products.map((p) => p.id) } } },
+      },
+      include: {
+        client: { select: { id: true, name: true } },
+        items: { include: { product: true } },
+      },
+      orderBy: { deadline: 'asc' },
+    });
+    if (!order) {
+      throw new NotFoundException('Нет заказов, готовых к отгрузке, с этим товаром');
+    }
+    return order;
   }
 }

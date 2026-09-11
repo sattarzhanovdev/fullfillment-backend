@@ -13,9 +13,35 @@ export class ShipmentsController {
     return this.shipmentsService.findAll({ statuses, from, to });
   }
 
+  @Get('by-barcode/:barcode')
+  findByBarcode(@Param('barcode') barcode: string) {
+    return this.shipmentsService.findByBarcode(barcode);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.shipmentsService.findOne(id);
+  }
+
+  @Get(':id/wb-barcode')
+  getWbBarcode(@Param('id') id: string) {
+    return this.shipmentsService.getWbBarcode(id);
+  }
+
+  @Get(':id/wb-shipping-points')
+  getShippingPoints(@Param('id') id: string, @Query('city') city: string, @Query('cargoType') cargoType?: string) {
+    const parsed = cargoType ? (Number(cargoType) as 1 | 2 | 3) : 1;
+    return this.shipmentsService.getShippingPoints(id, city, parsed);
+  }
+
+  @Patch(':id/wb-shipping-method')
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER)
+  setShippingMethod(
+    @Param('id') id: string,
+    @Body('shippingPointId') shippingPointId: number,
+    @Body('shippingType') shippingType: 'selfShipping' | 'transportCompany',
+  ) {
+    return this.shipmentsService.setShippingMethod(id, shippingPointId, shippingType);
   }
 
   @Post()
@@ -40,5 +66,12 @@ export class ShipmentsController {
   @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER)
   addSupply(@Param('id') id: string, @Param('supplyId') supplyId: string) {
     return this.shipmentsService.addSupply(id, supplyId);
+  }
+
+  /** Дёргается при скане товара на сборке — подключает заказ к отгрузке как можно раньше, чтобы стикер WB стал доступен сразу. */
+  @Post('orders/:orderId/ensure')
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER, UserRole.STOREKEEPER, UserRole.PACKER)
+  ensureOrderInShipment(@Param('orderId') orderId: string) {
+    return this.shipmentsService.ensureOrderInShipment(orderId);
   }
 }

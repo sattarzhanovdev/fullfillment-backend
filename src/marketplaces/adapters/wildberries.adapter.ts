@@ -49,6 +49,15 @@ interface WbSupply {
   name: string;
 }
 
+export interface WbShippingPoint {
+  id: number;
+  name: string;
+  address: string;
+  city: string;
+  officeType: 'sc' | 'sw' | 'pp';
+  cargoTypes: number[];
+}
+
 @Injectable()
 export class WildberriesAdapter implements MarketplaceAdapter {
   private readonly logger = new Logger(WildberriesAdapter.name);
@@ -184,6 +193,77 @@ export class WildberriesAdapter implements MarketplaceAdapter {
       apiKey,
     );
     return data?.supplies ?? [];
+  }
+
+  /** Создаёт реальную поставку в WB (POST /api/v3/supplies) — возвращает её id для дальнейших операций. */
+  async createSupply(apiKey: string, name: string): Promise<{ id: string }> {
+    this.logger.log(`createSupply: создание поставки "${name}" в WB Marketplace API`);
+    return this.request<{ id: string }>(MARKETPLACE_API_URL, '/api/v3/supplies', apiKey, {
+      method: 'POST',
+      body: { name },
+    });
+  }
+
+  /**
+   * Присоединяет заказ (реальный числовой id заказа WB) к поставке.
+   * ВАЖНО: путь у этого метода — /api/marketplace/v3/... (не /api/v3/... как у остальных
+   * операций с поставками), а id заказа передаётся в теле запроса массивом `orders` (числа),
+   * а не в URL — так по актуальной спецификации WB (проверено по реальному 404 от WB API).
+   */
+  async addOrderToSupply(apiKey: string, supplyId: string, orderId: string): Promise<void> {
+    this.logger.log(`addOrderToSupply: заказ ${orderId} → поставка ${supplyId}`);
+    await this.request<void>(MARKETPLACE_API_URL, `/api/marketplace/v3/supplies/${supplyId}/orders`, apiKey, {
+      method: 'PATCH',
+      body: { orders: [Number(orderId)] },
+    });
+  }
+
+  /** Штрихкод короба поставки, который WB распознаёт при приёмке — то, что реально клеится на короб. */
+  async getSupplyBarcode(apiKey: string, supplyId: string, type: 'png' | 'svg' = 'png'): Promise<MarketplaceLabelItem> {
+    this.logger.log(`getSupplyBarcode: запрос штрихкода поставки ${supplyId} (${type})`);
+    const data = await this.request<{ barcode: string; file: string }>(
+      MARKETPLACE_API_URL,
+      `/api/v3/supplies/${supplyId}/barcode?type=${type}`,
+      apiKey,
+    );
+    return {
+      orderNumber: supplyId,
+      contentType: type === 'png' ? 'image/png' : 'image/svg+xml',
+      fileBase64: data.file,
+    };
+  }
+
+  /**
+   * Закрывает поставку (готова к передаче в доставку WB) — после этого добавить заказы уже
+   * нельзя. Требует, чтобы для поставки заранее был установлен способ отгрузки (см.
+   * setShippingMethod) — иначе WB вернёт 409 для продавцов РФ на пункты приёма РФ.
+   */
+  async deliverSupply(apiKey: string, supplyId: string): Promise<void> {
+    this.logger.log(`deliverSupply: закрытие поставки ${supplyId}`);
+    await this.request<void>(MARKETPLACE_API_URL, `/api/v3/supplies/${supplyId}/deliver`, apiKey, { method: 'PATCH' });
+  }
+
+  /** Список доступных пунктов отгрузки поставок для города — нужен, чтобы выбрать shippingPointId. */
+  async getShippingPoints(apiKey: string, city: string, cargoType: 1 | 2 | 3 = 1): Promise<WbShippingPoint[]> {
+    this.logger.log(`getShippingPoints: пункты отгрузки для города "${city}" (cargoType=${cargoType})`);
+    const data = await this.request<{ shippingPoints: WbShippingPoint[] }>(
+      MARKETPLACE_API_URL,
+      `/api/marketplace/v3/fbs/shipping-points?city=${encodeURIComponent(city)}&cargoType=${cargoType}`,
+      apiKey,
+    );
+    return data?.shippingPoints ?? [];
+  }
+
+  /** Устанавливает способ, дату и пункт отгрузки поставки — обязательно перед deliverSupply. */
+  async setShippingMethod(
+    apiKey: string,
+    params: { supplyId: string; shippingDt: string; shippingPointId: number; shippingType: 'selfShipping' | 'transportCompany' },
+  ): Promise<void> {
+    this.logger.log(`setShippingMethod: поставка ${params.supplyId} → пункт ${params.shippingPointId} (${params.shippingType})`);
+    await this.request<void>(MARKETPLACE_API_URL, '/api/marketplace/v3/fbs/supplies/shipping-method', apiKey, {
+      method: 'PATCH',
+      body: { data: [params] },
+    });
   }
 
   /** Реальные этикетки заказа (PNG, base64) с WB — то, что клеится на посылку перед отгрузкой. */

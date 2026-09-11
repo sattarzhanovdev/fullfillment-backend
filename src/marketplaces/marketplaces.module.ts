@@ -10,6 +10,6 @@ import { ProductsModule } from '../products/products.module';
   imports: [OrdersModule, ProductsModule],
   controllers: [MarketplacesController],
   providers: [MarketplacesService, WildberriesAdapter, OzonAdapter],
-  exports: [MarketplacesService],
+  exports: [MarketplacesService, WildberriesAdapter],
 })
 export class MarketplacesModule {}
