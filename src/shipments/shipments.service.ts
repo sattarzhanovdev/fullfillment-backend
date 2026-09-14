@@ -228,10 +228,15 @@ export class ShipmentsService {
     return integration?.apiKey ?? null;
   }
 
+  private async createWbSupply(apiKey: string, shipmentId: string, scheduledAt: Date): Promise<string> {
+    const created = await this.wbAdapter.createSupply(apiKey, `Отгрузка ${scheduledAt.toISOString().slice(0, 10)}`);
+    await this.prisma.shipment.update({ where: { id: shipmentId }, data: { wbSupplyId: created.id } });
+    return created.id;
+  }
+
   /**
    * Синхронизирует заказ с реальной поставкой WB (если у клиента подключён WB API): создаёт
    * поставку в WB при первом заказе, затем присоединяет заказ по его настоящему id WB.
-   * Не подключён API — тихо ничего не делает (это не ошибка, просто локальная отгрузка).
    */
   private async syncOrderToWb(shipmentId: string, clientId: string, orderNumber: string): Promise<void> {
     const shipment = await this.prisma.shipment.findUniqueOrThrow({ where: { id: shipmentId } });
@@ -240,14 +245,20 @@ export class ShipmentsService {
     const apiKey = await this.findWbApiKey(clientId);
     if (!apiKey) throw new Error('У клиента не подключён API-ключ WB — заказ не может быть подтверждён автоматически');
 
-    let wbSupplyId = shipment.wbSupplyId;
-    if (!wbSupplyId) {
-      const created = await this.wbAdapter.createSupply(apiKey, `Отгрузка ${shipment.scheduledAt.toISOString().slice(0, 10)}`);
-      wbSupplyId = created.id;
-      await this.prisma.shipment.update({ where: { id: shipmentId }, data: { wbSupplyId } });
-    }
+    let wbSupplyId = shipment.wbSupplyId ?? (await this.createWbSupply(apiKey, shipmentId, shipment.scheduledAt));
 
-    await this.wbAdapter.addOrderToSupply(apiKey, wbSupplyId, orderNumber);
+    try {
+      await this.wbAdapter.addOrderToSupply(apiKey, wbSupplyId, orderNumber);
+    } catch (err) {
+      // Поставка у нас числится открытой, но WB могла её закрыть/удалить на своей стороне
+      // (сама, или продавец вручную в личном кабинете) — тогда WB отвечает 404. Заводим
+      // новую поставку взамен "протухшей" и пробуем ещё раз, вместо того чтобы вечно
+      // биться в один и тот же мёртвый wbSupplyId.
+      if (!(err as Error).message.includes('вернул 404')) throw err;
+      this.logger.warn(`addOrderToSupply: поставка ${wbSupplyId} не найдена на WB (404) — создаю новую взамен`);
+      wbSupplyId = await this.createWbSupply(apiKey, shipmentId, shipment.scheduledAt);
+      await this.wbAdapter.addOrderToSupply(apiKey, wbSupplyId, orderNumber);
+    }
   }
 
   /** Реальный штрихкод короба из WB (для печати) — если у клиента отгрузки подключён WB API. */
