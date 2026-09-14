@@ -329,4 +329,42 @@ export class OrdersService {
     }
     return order;
   }
+
+  /**
+   * Объясняет, почему штрихкод не нашёлся на экране сборки (/orders/picking/items
+   * его не отдаёт для заказов вне статусов AWAITING_PROCESSING/IN_PROGRESS/PICKING —
+   * оператору просто нечего сканировать, и генерическое "штрихкод не найден" вводит в
+   * заблуждение, если товар на самом деле ждёт цену, заблокирован по долгу и т.п.).
+   */
+  async diagnoseBarcode(barcode: string) {
+    const products = await this.prisma.product.findMany({ where: { barcode } });
+    if (products.length === 0) {
+      return { reason: 'no_product' as const };
+    }
+
+    const item = await this.prisma.orderItem.findFirst({
+      where: { productId: { in: products.map((p) => p.id) } },
+      include: { order: { include: { client: { select: { name: true } } } }, product: true },
+      orderBy: { order: { createdAt: 'desc' } },
+    });
+    if (!item) {
+      return { reason: 'no_active_order' as const };
+    }
+
+    if (item.notFound) {
+      return { reason: 'marked_not_found' as const, orderNumber: item.order.orderNumber };
+    }
+    if (['AWAITING_PROCESSING', 'IN_PROGRESS', 'PICKING'].includes(item.order.status) && item.qtyPicked >= item.qtyNeeded) {
+      return { reason: 'already_picked' as const, orderNumber: item.order.orderNumber };
+    }
+    if (!['AWAITING_PROCESSING', 'IN_PROGRESS', 'PICKING'].includes(item.order.status)) {
+      return {
+        reason: 'wrong_status' as const,
+        orderNumber: item.order.orderNumber,
+        status: item.order.status,
+        clientName: item.order.client.name,
+      };
+    }
+    return { reason: 'unknown' as const, orderNumber: item.order.orderNumber };
+  }
 }

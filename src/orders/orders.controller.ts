@@ -43,6 +43,11 @@ export class OrdersController {
     return this.ordersService.findReadyByBarcode(barcode);
   }
 
+  @Get('picking/diagnose/:barcode')
+  diagnoseBarcode(@Param('barcode') barcode: string) {
+    return this.ordersService.diagnoseBarcode(barcode);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.ordersService.findOne(id);
