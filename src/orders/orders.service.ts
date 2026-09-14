@@ -192,6 +192,28 @@ export class OrdersService {
     return this.findOne(orderId);
   }
 
+  /** Массово прогоняет reprocess() по всем заказам в заданном блокирующем статусе (кнопка «Обработать все» в списке заказов). */
+  async reprocessAllByStatus(status: 'ERROR' | 'NEEDS_PRICE' | 'BLOCKED_DEBT') {
+    const orders = await this.prisma.marketplaceOrder.findMany({ where: { status }, select: { id: true, orderNumber: true } });
+
+    const results: { orderNumber: string; newStatus: string; error?: string }[] = [];
+    for (const order of orders) {
+      try {
+        const updated = await this.reprocess(order.id);
+        results.push({ orderNumber: order.orderNumber, newStatus: updated.status });
+      } catch (err) {
+        results.push({ orderNumber: order.orderNumber, newStatus: status, error: (err as Error).message });
+      }
+    }
+
+    return {
+      total: orders.length,
+      movedToProcessing: results.filter((r) => r.newStatus === 'AWAITING_PROCESSING').length,
+      stillBlocked: results.filter((r) => r.newStatus !== 'AWAITING_PROCESSING').length,
+      results,
+    };
+  }
+
   async transitionStatus(
     orderId: string,
     status: FunnelStatus,

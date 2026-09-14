@@ -71,6 +71,12 @@ export class OrdersController {
     return this.ordersService.reprocess(id);
   }
 
+  @Post('reprocess-bulk')
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER)
+  reprocessBulk(@Body('status') status: 'ERROR' | 'NEEDS_PRICE' | 'BLOCKED_DEBT') {
+    return this.ordersService.reprocessAllByStatus(status);
+  }
+
   @Patch(':id/assign')
   @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER)
   assign(@Param('id') id: string, @Body('assigneeId') assigneeId: string) {
