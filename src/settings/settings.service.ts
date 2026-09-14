@@ -6,6 +6,14 @@ export const SETTING_KEYS = {
   GENERAL_DEBT_LIMIT: 'general_debt_limit',
   DEBT_BLOCKED_OPERATIONS: 'debt_blocked_operations', // e.g. ["receiving","picking","packing","shipping"]
   COMPANY_NAME: 'company_name',
+  SERVICE_PRICE_RECEIVING: 'service_price_receiving',
+  SERVICE_PRICE_STORAGE: 'service_price_storage',
+  SERVICE_PRICE_PICKING_FBS: 'service_price_picking_fbs',
+  SERVICE_PRICE_PACKING: 'service_price_packing',
+  SERVICE_PRICE_LABEL: 'service_price_label',
+  SERVICE_PRICE_SHIPPING: 'service_price_shipping',
+  SERVICE_PRICE_RETURN: 'service_price_return',
+  SERVICE_PRICE_PALLET: 'service_price_pallet',
 } as const;
 
 const DEFAULTS: Record<string, unknown> = {
@@ -13,6 +21,14 @@ const DEFAULTS: Record<string, unknown> = {
   [SETTING_KEYS.GENERAL_DEBT_LIMIT]: 10000,
   [SETTING_KEYS.DEBT_BLOCKED_OPERATIONS]: ['picking', 'packing', 'shipping'],
   [SETTING_KEYS.COMPANY_NAME]: 'Fulfillment Center',
+  [SETTING_KEYS.SERVICE_PRICE_RECEIVING]: 5,
+  [SETTING_KEYS.SERVICE_PRICE_STORAGE]: 0.5,
+  [SETTING_KEYS.SERVICE_PRICE_PICKING_FBS]: 30,
+  [SETTING_KEYS.SERVICE_PRICE_PACKING]: 20,
+  [SETTING_KEYS.SERVICE_PRICE_LABEL]: 5,
+  [SETTING_KEYS.SERVICE_PRICE_SHIPPING]: 15,
+  [SETTING_KEYS.SERVICE_PRICE_RETURN]: 30,
+  [SETTING_KEYS.SERVICE_PRICE_PALLET]: 500,
 };
 
 @Injectable()

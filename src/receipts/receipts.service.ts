@@ -7,6 +7,8 @@ export interface CreateReceiptInput {
   warehouseId: string;
   documentNumber?: string;
   expectedPlaces?: number;
+  transportCompany?: string;
+  comment?: string;
   items: { productId: string; expectedQty: number }[];
 }
 
@@ -23,7 +25,12 @@ export class ReceiptsService {
         ...(filters.clientId && { clientId: filters.clientId }),
         ...(filters.status && { status: filters.status as any }),
       },
-      include: { client: { select: { id: true, name: true } }, items: true },
+      include: {
+        client: { select: { id: true, name: true } },
+        warehouse: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, fullName: true } },
+        items: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -37,14 +44,23 @@ export class ReceiptsService {
     return receipt;
   }
 
+  private async generateDocumentNumber(): Promise<string> {
+    const count = await this.prisma.receipt.count();
+    const num = String(Date.now()).slice(-9) + String(count).padStart(3, '0');
+    return num.slice(0, 12);
+  }
+
   async create(input: CreateReceiptInput, userId?: string) {
     const expectedItems = input.items.reduce((sum, i) => sum + i.expectedQty, 0);
+    const documentNumber = input.documentNumber || (await this.generateDocumentNumber());
     return this.prisma.receipt.create({
       data: {
         clientId: input.clientId,
         warehouseId: input.warehouseId,
-        documentNumber: input.documentNumber,
+        documentNumber,
         expectedPlaces: input.expectedPlaces,
+        transportCompany: input.transportCompany,
+        comment: input.comment,
         expectedItems,
         createdById: userId,
         items: {

@@ -158,4 +158,39 @@ export class DashboardService {
       take,
     });
   }
+
+  /** KPI сотрудников за сегодня: кто сколько собрал/упаковал/отгрузил FBS-заказов. */
+  async getEmployeeKpiToday() {
+    const today = startOfDay();
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    const [pickEvents, packEvents, shipEvents] = await Promise.all([
+      this.prisma.orderStatusHistory.findMany({
+        where: { status: 'PICKED', createdAt: { gte: today, lt: tomorrow }, userId: { not: null } },
+        select: { userId: true },
+      }),
+      this.prisma.orderStatusHistory.findMany({
+        where: { status: 'PACKED', createdAt: { gte: today, lt: tomorrow }, userId: { not: null } },
+        select: { userId: true },
+      }),
+      this.prisma.orderStatusHistory.findMany({
+        where: { status: 'SHIPPED', createdAt: { gte: today, lt: tomorrow }, userId: { not: null } },
+        select: { userId: true },
+      }),
+    ]);
+
+    const countBy = (items: { userId: string | null }[]) => {
+      const map = new Map<string, number>();
+      for (const { userId } of items) {
+        if (!userId) continue;
+        map.set(userId, (map.get(userId) ?? 0) + 1);
+      }
+      return Object.fromEntries(map);
+    };
+
+    return {
+      ordersPickedByUser: countBy(pickEvents),
+      ordersPackedByUser: countBy(packEvents),
+      ordersShippedByUser: countBy(shipEvents),
+    };
+  }
 }

@@ -385,20 +385,22 @@ model Reservation {
 // ---------- Receiving ----------
 
 model Receipt {
-  id              String        @id @default(cuid())
-  clientId        String
-  client          Client        @relation(fields: [clientId], references: [id])
-  warehouseId     String
-  warehouse       Warehouse     @relation(fields: [warehouseId], references: [id])
-  documentNumber  String?
-  date            DateTime      @default(now())
-  expectedPlaces  Int?
-  expectedItems   Int?
-  status          ReceiptStatus @default(DRAFT)
-  createdById     String?
-  createdBy       User?         @relation(fields: [createdById], references: [id])
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  clientId         String
+  client           Client        @relation(fields: [clientId], references: [id])
+  warehouseId      String
+  warehouse        Warehouse     @relation(fields: [warehouseId], references: [id])
+  documentNumber   String?
+  date             DateTime      @default(now())
+  expectedPlaces   Int?
+  expectedItems    Int?
+  transportCompany String?
+  comment          String?
+  status           ReceiptStatus @default(DRAFT)
+  createdById      String?
+  createdBy        User?         @relation(fields: [createdById], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   items ReceiptItem[]
 }

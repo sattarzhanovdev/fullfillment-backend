@@ -34,4 +34,9 @@ export class DashboardController {
   getUpcomingShipments() {
     return this.dashboardService.getUpcomingShipments();
   }
+
+  @Get('employee-kpi')
+  getEmployeeKpi() {
+    return this.dashboardService.getEmployeeKpiToday();
+  }
 }
