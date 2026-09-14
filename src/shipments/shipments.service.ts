@@ -238,7 +238,7 @@ export class ShipmentsService {
     if (shipment.marketplace && shipment.marketplace !== 'WILDBERRIES') return;
 
     const apiKey = await this.findWbApiKey(clientId);
-    if (!apiKey) return;
+    if (!apiKey) throw new Error('У клиента не подключён API-ключ WB — заказ не может быть подтверждён автоматически');
 
     let wbSupplyId = shipment.wbSupplyId;
     if (!wbSupplyId) {
