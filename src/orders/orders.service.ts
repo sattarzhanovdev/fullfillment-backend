@@ -134,6 +134,64 @@ export class OrdersService {
     return this.findOne(order.id);
   }
 
+  /**
+   * Повторно прогоняет проверки создания (резерв остатка / цена / долг клиента) для
+   * заказа, застрявшего в ERROR / NEEDS_PRICE / BLOCKED_DEBT — например, когда пришёл
+   * остаток, менеджер выставил цену или клиент погасил долг. Без этого такой заказ
+   * висит там навсегда: никто автоматически не пересчитывает его статус.
+   */
+  async reprocess(orderId: string) {
+    const order = await this.prisma.marketplaceOrder.findUnique({
+      where: { id: orderId },
+      include: { items: true, reservations: true },
+    });
+    if (!order) throw new NotFoundException('Заказ не найден');
+    if (!['ERROR', 'NEEDS_PRICE', 'BLOCKED_DEBT'].includes(order.status)) {
+      throw new BadRequestException('Повторная обработка доступна только для заказов в статусе «Ошибка», «Требует цены» или «Заблокировано по долгу»');
+    }
+
+    let totalPrice = 0;
+    let needsPrice = false;
+    let reservationError = false;
+
+    for (const item of order.items) {
+      const alreadyReserved = order.reservations.some((r) => r.productId === item.productId && !r.isReleased);
+      if (!alreadyReserved) {
+        try {
+          await this.stockService.reserve({
+            productId: item.productId,
+            clientId: order.clientId,
+            qty: item.qtyNeeded,
+            orderId: order.id,
+          });
+        } catch {
+          reservationError = true;
+        }
+      }
+
+      const priceResult = await this.pricingService.calculateForProduct(item.productId);
+      if (priceResult.price === null) {
+        needsPrice = true;
+      } else {
+        totalPrice += priceResult.price * item.qtyNeeded;
+      }
+    }
+
+    let nextStatus: FunnelStatus = 'AWAITING_PROCESSING';
+    if (reservationError) nextStatus = 'ERROR';
+    else if (needsPrice) nextStatus = 'NEEDS_PRICE';
+    else {
+      const debtSummary = await this.debtsService.getSummary(order.clientId);
+      if (debtSummary.state === 'BLOCKED') nextStatus = 'BLOCKED_DEBT';
+    }
+
+    await this.transitionStatus(orderId, nextStatus, null, {
+      processingCost: needsPrice ? undefined : totalPrice,
+    });
+
+    return this.findOne(orderId);
+  }
+
   async transitionStatus(
     orderId: string,
     status: FunnelStatus,

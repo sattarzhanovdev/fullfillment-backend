@@ -40,12 +40,15 @@ function buildTransitions(): Record<FunnelStatus, FunnelStatus[]> {
   map.AWAITING_PROCESSING.push('PICKING');
   map.PICKED.push('PACKING');
 
-  // Из отдельных статусов можно вернуться в обработку
+  // Из отдельных статусов можно вернуться в обработку. Блокирующие статусы (ERROR/
+  // NEEDS_PRICE/BLOCKED_DEBT) также ведут друг в друга — повторная проверка при
+  // reprocess() может обнаружить другую причину блокировки, чем была изначально.
+  const BLOCKING_STATUSES: FunnelStatus[] = ['ERROR', 'NEEDS_PRICE', 'BLOCKED_DEBT'];
   map.CANCELLED = [];
-  map.ERROR = ['AWAITING_PROCESSING', 'CANCELLED'];
+  map.ERROR = ['AWAITING_PROCESSING', 'CANCELLED', ...BLOCKING_STATUSES];
   map.ITEM_NOT_FOUND = ['PICKING', 'CANCELLED'];
-  map.NEEDS_PRICE = ['AWAITING_PROCESSING', 'CANCELLED'];
-  map.BLOCKED_DEBT = ['AWAITING_PROCESSING', 'CANCELLED'];
+  map.NEEDS_PRICE = ['AWAITING_PROCESSING', 'CANCELLED', ...BLOCKING_STATUSES];
+  map.BLOCKED_DEBT = ['AWAITING_PROCESSING', 'CANCELLED', ...BLOCKING_STATUSES];
   map.NEEDS_CLARIFICATION = ['AWAITING_PROCESSING', 'CANCELLED'];
   map.COMPLETED = [];
   return map;

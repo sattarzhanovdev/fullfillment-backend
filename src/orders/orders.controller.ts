@@ -65,6 +65,12 @@ export class OrdersController {
     return this.ordersService.transitionStatus(id, status, user.id);
   }
 
+  @Post(':id/reprocess')
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER)
+  reprocess(@Param('id') id: string) {
+    return this.ordersService.reprocess(id);
+  }
+
   @Patch(':id/assign')
   @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MANAGER)
   assign(@Param('id') id: string, @Body('assigneeId') assigneeId: string) {
